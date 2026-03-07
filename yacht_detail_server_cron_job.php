@@ -1,76 +1,115 @@
 <?php
 
-/* allow long execution */
-set_time_limit(0);
 
-/* load WordPress */
-require_once ABSPATH . 'wp-load.php';
+set_time_limit(0); // prevents timeout during large API sync
 
-/* stop if WP not loaded */
+// load WordPress core
+require_once $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php'; // loads WP environment
+
+// stop execution if WordPress failed to load
 if (!defined('ABSPATH')) {
     exit;
 }
 
-/* sync yacht details in batches */
+
 function yacht_details_sync_batch() {
 
-    global $wpdb;
+    global $wpdb; 
 
-    /* tables */
-    $yachts_table  = $wpdb->prefix . 'temp_yachts';
-    $details_table = $wpdb->prefix . 'temp_yacht_details';
+    /* define database tables */
+    $yachts_table  = $wpdb->prefix . 'temp_yachts'; 
+    $details_table = $wpdb->prefix . 'temp_yacht_details'; 
 
-    $limit = 50; 
+    $limit = 50; // batch size
 
-    /* Reads the last saved offset  */
-    $offset = get_option('yacht_details_sync_offset', 0); //Offset = where to start reading rows
 
-    /* get next batch */
+   /* get sync timestamp for the entire sync cycle */
+$sync_time = get_option('yacht_sync_time'); // read previously saved sync time (same for all batches)
+
+/* if this is the first batch of a new sync cycle */
+if (!$sync_time) {
+    $sync_time = current_time('timestamp'); // generate one timestamp for the whole sync
+    update_option('yacht_sync_time', $sync_time); // save it so next batches use same value
+}
+
+
+    /* get last processed offset from WP options */
+    $offset = get_option('yacht_details_sync_offset', 0); // starting point for this/current batch
+
+    /* fetch next batch of yacht codes */
     $codes = $wpdb->get_col(
         $wpdb->prepare(
-            "SELECT code FROM $yachts_table LIMIT %d OFFSET %d",
+            "SELECT code FROM $yachts_table ORDER BY code LIMIT %d OFFSET %d", // paginated fetch
             $limit,
             $offset
         )
     );
 
-    /* if finished reset offset */
+    /* if no codes found → sync finished */
     if (empty($codes)) {
-        update_option('yacht_details_sync_offset', 0);
-        return;
-    }
 
+    /* mark yachts not seen in this sync as removed */
+    $wpdb->query(
+        $wpdb->prepare(
+            "UPDATE $details_table SET status='removed' WHERE last_seen < %d",
+            $sync_time
+        )
+    );
+
+    update_option('yacht_details_sync_offset', 0); // restart next cycle
+    delete_option('yacht_sync_time'); // reset sync cycle
+
+    return;
+}
+
+    /* loop through each yacht code */
     foreach ($codes as $code) {
 
-      // AVODING EMPTY REQ
-        if (!$code) continue;
+        // skip empty yacht codes
+        if (!$code) continue; // prevents invalid API calls
 
-        /* details API */
+        /* build API request URL */
         $url = 'https://www.centralyachtagent.com/snapins/json-ebrochure.php?user=1073&apicode=1073YF4$sdRr91%X&idin='.$code;
 
-        $response = wp_remote_get($url, ['timeout' => 60]);
+        /* request yacht details from API */
+        $response = wp_remote_get($url, ['timeout' => 60]); // remote request with timeout
 
-        if (is_wp_error($response)) {
-            continue;
-        }
 
-      
+        /* skip if API request failed */
+if (is_wp_error($response)) {
+continue; // request failed
+}
 
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
+$status = wp_remote_retrieve_response_code($response); // get HTTP status
 
+if ($status !== 200) {
+continue; // skip if API not OK
+}
+
+        /* get API response body */
+        $body = wp_remote_retrieve_body($response); // extract raw JSON
+
+            /* convert JSON to PHP array */
+            $data = json_decode($body, true); // decode API response
+
+            if (!$data || json_last_error() !== JSON_ERROR_NONE) { // check if JSON invalid
+                continue; // skip this yacht
+            }
+
+        /* skip if yacht data missing */
         if (empty($data['yacht'])) {
-            continue;
+            continue; // invalid or removed yacht
         }
 
-        sleep(1); // SMALL DELAY 
+        sleep(200000); // small delay to prevent API rate limits
 
-        $y = $data['yacht'];
+        /* store yacht data */
+        $y = $data['yacht']; // shorthand variable
 
-        /* field mapping */
-        $name = sanitize_text_field($y['yachtName']);
+        /* sanitize and map fields from API */
+        $name = sanitize_text_field($y['yachtName'] ?? ''); 
         $type = sanitize_text_field($y['yachtType']);
-        $length_feet = floatval(str_replace(' Ft','',$y['sizeFeet'])); //removing ft if in api
+        $length_feet = floatval(str_replace(' Ft','',$y['sizeFeet'])); // remove "Ft" text
         $beam = floatval($y['yachtBeam']);
         $draft = floatval($y['yachtDraft']);
         $pax = intval($y['yachtPax']);
@@ -93,12 +132,12 @@ function yacht_details_sync_batch() {
         $main_image = esc_url_raw($y['yachtPic1']);
         $layout_image = esc_url_raw($y['yachtLayout']);
 
-        /* insert or update */
+        /* insert new yacht or update existing */
         $wpdb->query(
             $wpdb->prepare(
                 "INSERT INTO $details_table
-                (yacht_code,name,type,length_feet,beam,draft,pax,cabins,year_built,builder,low_price,high_price,currency,summer_area,winter_area,home_port,cruise_speed,ac,accommodations,description,captain_name,crew_name,crew_profile,main_image,layout_image)
-                VALUES (%s,%s,%s,%f,%f,%f,%d,%d,%d,%s,%f,%f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                (yacht_code,name,type,length_feet,beam,draft,pax,cabins,year_built,builder,low_price,high_price,currency,summer_area,winter_area,home_port,cruise_speed,ac,accommodations,description,captain_name,crew_name,crew_profile,main_image,layout_image,last_seen,status)
+                VALUES (%s,%s,%s,%f,%f,%f,%d,%d,%d,%s,%f,%f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,'active')
                 ON DUPLICATE KEY UPDATE
                 name=VALUES(name),
                 type=VALUES(type),
@@ -123,15 +162,17 @@ function yacht_details_sync_batch() {
                 crew_name=VALUES(crew_name),
                 crew_profile=VALUES(crew_profile),
                 main_image=VALUES(main_image),
-                layout_image=VALUES(layout_image)",
-                $code,$name,$type,$length_feet,$beam,$draft,$pax,$cabins,$year_built,$builder,$low_price,$high_price,$currency,$summer_area,$winter_area,$home_port,$cruise_speed,$ac,$accommodations,$description,$captain_name,$crew_name,$crew_profile,$main_image,$layout_image
+                layout_image=VALUES(layout_image),
+                last_seen=%d, 
+                status='active'", 
+                $code,$name,$type,$length_feet,$beam,$draft,$pax,$cabins,$year_built,$builder,$low_price,$high_price,$currency,$summer_area,$winter_area,$home_port,$cruise_speed,$ac,$accommodations,$description,$captain_name,$crew_name,$crew_profile,$main_image,$layout_image,$sync_time,$sync_time
             )
         );
     }
 
-    /* update offset for next run */
-    update_option('yacht_details_sync_offset', $offset + $limit);
+    /* move offset forward for next cron run */
+    update_option('yacht_details_sync_offset', $offset + $limit); // next batch start
 }
 
-/* run batch sync */
-yacht_details_sync_batch();
+/* run the sync function */
+yacht_details_sync_batch(); // execute batch sync
