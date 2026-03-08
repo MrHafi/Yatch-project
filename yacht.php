@@ -90,3 +90,20 @@ function mp_ajax_handler() {
 
 add_action('wp_ajax_mp_ajax_handler', 'mp_ajax_handler');
 add_action('wp_ajax_nopriv_mp_ajax_handler', 'mp_ajax_handler');
+
+
+
+
+// CHANGING IMAGE FORMATE TO WEBP
+// Force WordPress to generate WebP images instead of JPG/PNG
+add_filter('image_editor_output_format', function ($formats) {
+
+    // Convert JPEG uploads to WebP
+    $formats['image/jpeg'] = 'image/webp';
+
+    // Convert PNG uploads to WebP
+    $formats['image/png']  = 'image/webp';
+
+    return $formats;
+
+});

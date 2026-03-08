@@ -1,7 +1,8 @@
 <?php
 
 // /* Load WordPress so we can use $wpdb and WP functions 
-require_once ABSPATH . 'wp-load.php';
+// require_once ABSPATH . 'wp-load.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php';
 
 if (!defined('ABSPATH')) {
     exit;
