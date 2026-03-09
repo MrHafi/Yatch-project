@@ -7,13 +7,34 @@ set_time_limit(0); // prevents timeout during large API sync
 require_once $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php'; // loads WP environment
 require_once ABSPATH . 'wp-includes/pluggable.php';
 
-// stop execution if WordPress failed to load
-if (!defined('ABSPATH')) {
-    exit;
+global $wp_rewrite;
+
+if ( empty($wp_rewrite) ) {
+    $wp_rewrite = new WP_Rewrite();
+    $wp_rewrite->init();
 }
 
 
+// LIMITING CRON TO RUN ONCE NOT TWICE
+if (get_transient('yacht_sync_lock')) {
+    return;
+}
+
+set_transient('yacht_sync_lock', 1, 300);
+
+// LOG FUNCTION 
+function yacht_sync_log($message){
+
+    $log_file = plugin_dir_path(__FILE__) . 'yacht_detail_sync_log.txt';
+    $time = date('Y-m-d H:i:s');
+    $line = $time . ' - ' . $message . PHP_EOL;
+    file_put_contents($log_file, $line, FILE_APPEND);
+}
+
+
+
 function yacht_details_sync_batch() {
+yacht_sync_log('Sync started'); //log
 
     global $wpdb; 
 
@@ -48,6 +69,7 @@ if (!$sync_time) {
 
     /* if no codes found → sync finished */
     if (empty($codes)) {
+        yacht_sync_log('Sync finished');
 
     /* mark yachts not seen in this sync as removed */
     $wpdb->query(
@@ -84,12 +106,16 @@ require_once ABSPATH.'wp-admin/includes/image.php';
 
         /* skip if API request failed */
 if (is_wp_error($response)) {
+        yacht_sync_log('API request failed for yacht ' . $code); //log
+
 continue; // request failed
 }
 
 $status = wp_remote_retrieve_response_code($response); // get HTTP status
 
 if ($status !== 200) {
+        yacht_sync_log('API status '.$status.' for yacht '.$code); //log
+
 continue; // skip if API not OK
 }
 
@@ -100,6 +126,8 @@ continue; // skip if API not OK
             $data = json_decode($body, true); // decode API response
 
             if (!$data || json_last_error() !== JSON_ERROR_NONE) { // check if JSON invalid
+                yacht_sync_log('Invalid JSON for yacht '.$code); //log
+
                 continue; // skip this yacht
             }
 
@@ -118,34 +146,34 @@ continue; // skip if API not OK
         /* =============================ALL FIELDS FROM APUI=============== */
         $name = sanitize_text_field($y['yachtName'] ?? ''); 
        $type = sanitize_text_field($y['yachtType'] ?? '');
-        $length_feet = floatval(str_replace(' Ft','',$y['sizeFeet'])); // remove "Ft" text
+        $length_feet = floatval(str_replace(' Ft','',$y['sizeFeet'] ?? '')); // remove "Ft" text
         $beam = floatval($y['yachtBeam'] ?? 0);
         $draft = floatval($y['yachtDraft'] ?? 0);      $pax = intval($y['yachtPax'] ?? 0);
        $cabins = intval($y['yachtCabins'] ?? 0);
         $year_built = intval($y['yachtYearBuilt'] ?? 0);
         $builder = sanitize_text_field($y['yachtBuilder'] ?? '');
-        $low_price = floatval($y['yachtLowNumericPrice']);
-        $high_price = floatval($y['yachtHighNumericPrice']);
-        $currency = sanitize_text_field($y['yachtCurrency']) ?? '';
-        $summer_area = sanitize_text_field($y['yachtSummerArea']) ?? '';
-        $winter_area = sanitize_text_field($y['yachtWinterArea']) ?? '';
-        $home_port = sanitize_text_field($y['yachtHomePort']) ?? '';
-        $cruise_speed = sanitize_text_field($y['yachtCruiseSpeed']);
-        $ac = sanitize_text_field($y['yachtAc']) ?? '';
-        $accommodations = $y['yachtAccommodations'];
-        $description = $y['yachtDesc1'];
-        $captain_name = sanitize_text_field($y['yachtCaptainName']);
-        $crew_name = sanitize_text_field($y['yachtCrewName']);
-        $crew_profile = $y['yachtCrewProfile'];
-        $main_image = esc_url_raw($y['yachtPic1']); //API IMAGE 
-        $layout_image_api = esc_url_raw($y['yachtLayout']); //MAIN IMAGE TO DOWNLAD
+        $low_price = floatval($y['yachtLowNumericPrice'] ?? 0);
+        $high_price = floatval($y['yachtHighNumericPrice'] ?? 0);
+        $currency = sanitize_text_field($y['yachtCurrency'] ?? '');
+        $summer_area = sanitize_text_field($y['yachtSummerArea'] ?? '');
+        $winter_area = sanitize_text_field($y['yachtWinterArea'] ?? '');
+        $home_port = sanitize_text_field($y['yachtHomePort'] ?? '');
+        $cruise_speed = sanitize_text_field($y['yachtCruiseSpeed'] ?? '');
+        $ac = sanitize_text_field($y['yachtAc'] ?? '');
+        $accommodations = $y['yachtAccommodations'] ?? '';
+        $description = $y['yachtDesc1'] ?? '';
+        $captain_name = sanitize_text_field($y['yachtCaptainName'] ?? '');
+        $crew_name = sanitize_text_field($y['yachtCrewName'] ?? '');
+        $crew_profile = $y['yachtCrewProfile'] ?? '';
+        $main_image_api = esc_url_raw($y['yachtPic1'] ?? ''); // main yacht photo
+        $stored_main_image_api = esc_url_raw($y['yachtLayout'] ?? ''); // floor plan
 
 
 
-          // Fetch existing yacht record from database
+          // so this is about gettign all its old value of yacht if exist
         $row = $wpdb->get_row(
             $wpdb->prepare(
-                "SELECT data_hash, layout_image, layout_image_api 
+                "SELECT data_hash, layout_image, stored_main_image_api 
                 FROM $details_table 
                 WHERE yacht_code=%s",
                 $code
@@ -154,7 +182,7 @@ continue; // skip if API not OK
         // Previous values from DB
         $existing_hash          = $row->data_hash ?? null;
         $new_wp_image           = $row->layout_image ?? ''; // // final WordPress URL of downloaded image
-        $old_layout_image_api   = $row->layout_image_api ?? ''; //// Previously stored API layout image (used to detect image change)
+        $old_stored_main_image_api   = $row->stored_main_image_api ?? ''; //// Previously stored API layout image (used to detect image change)
 
 
 
@@ -186,9 +214,7 @@ continue; // skip if API not OK
 
 // Detect data change
 $data_changed = ($existing_hash !== $data_hash);
-
-// Detect image change
-$image_changed = ($old_layout_image_api !== $layout_image_api);
+$image_changed = ($old_stored_main_image_api !== $main_image_api);
 
 
 //-0------------------- Skip update if nothing changed-----------------
@@ -208,13 +234,35 @@ if (!$data_changed && !$image_changed) {
 }
 
 
-// Download new image only when layout image changed
-if ($image_changed && !empty($layout_image_api)) {
+  // Download new image only when Main image changed
+if ($image_changed && !empty($main_image_api)) {
 
-    $attachment_id = media_sideload_image($layout_image_api, 0, null, 'id');
+    // getting old image from db
+    $old_wp_image = $new_wp_image;
+
+    yacht_sync_log('Downloading image for yacht '.$code.' : '.$main_image_api);// log
+    
+    $attachment_id = media_sideload_image($main_image_api, 0, null, 'id');// download new image
 
     if (!is_wp_error($attachment_id)) {
+
+        // get new image URL
         $new_wp_image = wp_get_attachment_url($attachment_id);
+
+        // delete OLD image
+        if (!empty($old_wp_image)) {
+
+            $old_attachment_id = attachment_url_to_postid($old_wp_image);
+
+            if ($old_attachment_id) {
+                wp_delete_attachment($old_attachment_id, true);
+            }
+
+        }
+    }
+    else{ // IMAGE FAILED
+            yacht_sync_log('Image download failed for yacht ' . $code);
+
     }
 }
 
@@ -224,7 +272,7 @@ if ($image_changed && !empty($layout_image_api)) {
         $wpdb->query(
             $wpdb->prepare(
                 "INSERT INTO $details_table
-                (yacht_code,name,type,length_feet,beam,draft,pax,cabins,year_built,builder,low_price,high_price,currency,summer_area,winter_area,home_port,cruise_speed,ac,accommodations,description,captain_name,crew_name,crew_profile,main_image,layout_image,layout_image_api,last_seen,status,data_hash)
+                (yacht_code,name,type,length_feet,beam,draft,pax,cabins,year_built,builder,low_price,high_price,currency,summer_area,winter_area,home_port,cruise_speed,ac,accommodations,description,captain_name,crew_name,crew_profile,main_image,layout_image,stored_main_image_api,last_seen,status,data_hash)
                 VALUES (%s,%s,%s,%f,%f,%f,%d,%d,%d,%s,%f,%f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,'active', %s)
               
                 ON DUPLICATE KEY UPDATE
@@ -252,19 +300,23 @@ if ($image_changed && !empty($layout_image_api)) {
                 crew_profile=VALUES(crew_profile),
                 main_image=VALUES(main_image),
                 layout_image=VALUES(layout_image),
-                layout_image_api=VALUES(layout_image_api),
+                stored_main_image_api=VALUES(stored_main_image_api),
                 last_seen=%d, 
                 status='active',
                 data_hash=VALUES(data_hash)", 
                 
-                $code,$name,$type,$length_feet,$beam,$draft,$pax,$cabins,$year_built,$builder,$low_price,$high_price,$currency,$summer_area,$winter_area,$home_port,$cruise_speed,$ac,$accommodations,$description,$captain_name,$crew_name,$crew_profile,$main_image,$new_wp_image,$layout_image_api,$sync_time,$sync_time, $data_hash
+                $code,$name,$type,$length_feet,$beam,$draft,$pax,$cabins,$year_built,$builder,$low_price,$high_price,$currency,$summer_area,$winter_area,$home_port,$cruise_speed,$ac,$accommodations,$description,$captain_name,$crew_name,$crew_profile,$main_image_api,$new_wp_image,$main_image_api,$sync_time,$sync_time, $data_hash
             )
         );
+        yacht_sync_log('Yacht '.$code.' updated'); //log
     }
 
     /* move offset forward for next cron run */
     update_option('yacht_details_sync_offset', $offset + $limit); // next batch start
-}
+
+
+    }
 
 /* run the sync function */
 yacht_details_sync_batch(); // execute batch sync
+delete_transient('yacht_sync_lock');
