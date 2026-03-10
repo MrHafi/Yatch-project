@@ -20,6 +20,13 @@ require_once plugin_path . 'activation.php';
 require_once plugin_path . 'yacht_location_server_cron_job.php';
 require_once plugin_path . 'yacht_detail_server_cron_job.php';
 
+require_once plugin_path . 'yacht-detail-sync/yacht_sync_processor.php';
+require_once plugin_path . 'yacht-detail-sync/yacht_sync_batch.php';
+require_once plugin_path . 'yacht-detail-sync/yacht_sync_api.php';
+require_once plugin_path . 'yacht-detail-sync/yacht_sync_image.php';
+
+
+
 
 
 register_activation_hook(__FILE__, 'mp_plugin_activate');
