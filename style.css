@@ -1,0 +1,34 @@
+
+/* ARCHIVEPAGE */
+
+.all_page_template{
+display:flex;
+flex-direction: row;
+gap:50px;
+align-items:center;
+}
+
+#sidebar{
+width:260px;
+background:#f7f7f7;
+padding:20px;
+border-radius:6px;
+position:sticky;
+top:20px;
+height:100vh;
+}
+
+.main_section{
+flex:1;
+}
+
+
+.yacht-location-filters{
+    max-height: 200px;
+    overflow: scroll;
+}
+.all_sidebar{
+    display:flex;
+    gap:50px;
+    position: relative;
+}
