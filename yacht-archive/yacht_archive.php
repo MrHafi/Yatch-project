@@ -4,54 +4,101 @@ add_shortcode('all_yachtes','all_yachtes');
 function all_yachtes(){ ?>
 
 <div class="container p-5 text-center">
-<h2>Explore Our Extensive Fleet of Crewed Charter Yachts</h2>
-<p>Discover our curated selection of crewed charter yachts...</p>
+    <h2>Explore Our Extensive Fleet of Crewed Charter Yachts</h2>
+    <p>Discover our curated selection of crewed charter yachts...</p>
 </div>
 
-<div class="all_page_template">
-    <!-- SIDEBAR -->
-<div class="" id="sidebar">
-<?php yacht_sidebar(); ?>
+<div class="all_page_template d-flex flex-row"> <!-- FLEX ROW 25% / 75% -->
 
-</div>
+    <!-- SIDEBAR  -->
+    <div id="sidebar" class="flex-shrink-0" style="flex-basis:25%;">
+        <?php yacht_sidebar(); ?>
+    </div>
 
-<div class="main_section">
+    <!-- MAIN SECTION -->
+    <div class="main_section" style="flex-basis:75%;">
 
-<div class="container d-flex align-item-end"> <!-- SORTING -->
-<select id="yacht_sort" class="yacht_filter">
-<option value="">Default</option>
-<option value="price_low">Price (low to high)</option>
-<option value="price_high">Price (high to low)</option>
-<option value="name_az">Yacht Name (A-Z)</option>
-<option value="name_za">Yacht Name (Z-A)</option>
-<option value="guest_low">Guests (low to high)</option>
-<option value="guest_high">Guests (high to low)</option>
-<option value="size_low">Size (low to high)</option>
-<option value="size_high">Size (high to low)</option>
-</select>
-</div>
+        <div class="container d-flex align-items-end"> <!-- SORTING -->
+            <select id="yacht_sort" class="yacht_filter">
+                <option value="">Default</option>
+                <option value="price_low">Price (low to high)</option>
+                <option value="price_high">Price (high to low)</option>
+                <option value="name_az">Yacht Name (A-Z)</option>
+                <option value="name_za">Yacht Name (Z-A)</option>
+                <option value="guest_low">Guests (low to high)</option>
+                <option value="guest_high">Guests (high to low)</option>
+                <option value="size_low">Size (low to high)</option>
+                <option value="size_high">Size (high to low)</option>
+            </select>
+        </div>
 
-<div class="container py-5">
-<div id="yacht_results">
+        <div class="container py-5">
+            <div id="yacht_results">
+                <div class="row g-4">
+                    <?php
+                  global $wpdb;
+                    $table = $wpdb->prefix . 'temp_yacht_details';
 
-<div class="row g-4">
+                    // read URL params from homepage search form
+                    $url_location = isset($_GET['location']) ? sanitize_text_field($_GET['location']) : '';
+                    $url_guests   = isset($_GET['guests'])   ? intval($_GET['guests'])                : 0; //NO. GUESTS
+                    $url_checkin  = isset($_GET['checkin'])  ? sanitize_text_field($_GET['checkin'])  : '';
+                    $url_checkout = isset($_GET['checkout']) ? sanitize_text_field($_GET['checkout']) : '';
 
-<?php
-global $wpdb;
+                    $has_search = !empty($url_location) || $url_guests > 0 || !empty($url_checkin);
 
-$table = $wpdb->prefix . 'temp_yacht_details';
-$yachts = $wpdb->get_results("SELECT * FROM $table LIMIT 9");
+                    // if URL params exist - skip transient and run fresh query
+                    if($has_search){
+                        $conditions   = [];
+                        $conditions[] = "status = 'active'"; //CONDIUTION FOR ACTIVE ONLY
 
-foreach($yachts as $yacht){
+                        if($url_guests > 0)       $conditions[] = $wpdb->prepare("pax >= %d", $url_guests);
+                        if($url_location != '')   $conditions[] = $wpdb->prepare("home_port = %s", $url_location);
 
-include plugin_path . 'yacht-archive/templates/yacht_card.php';
+                        if(!empty($url_checkin) && !empty($url_checkout)){
+                            $availability_table = $wpdb->prefix . 'yacht_availability';
+                            $booked_codes = $wpdb->get_col($wpdb->prepare(
+                                "SELECT DISTINCT yacht_code FROM $availability_table
+                                WHERE start_date <= %s AND end_date >= %s",
+                                $url_checkout, $url_checkin
+                            ));
+                            if(!empty($booked_codes)){
+                                $placeholders = implode(',', array_fill(0, count($booked_codes), '%s'));
+                                $conditions[] = $wpdb->prepare("yacht_code NOT IN ($placeholders)", ...$booked_codes);
+                            }
+                        }
 
+                        $where  = "WHERE " . implode(" AND ", $conditions);
+                        $yachts = $wpdb->get_results(
+                            "SELECT name, home_port, length_feet, type, pax, low_price, yacht_code, main_image
+                            FROM $table $where LIMIT 9"
+                        );
 
-}
-?>
+                    } else {
+                        // no URL params - use transient cache
+                        $yachts = get_transient('yacht_initial_results');
+                        if(!$yachts){
+                            $yachts = $wpdb->get_results(
+                                "SELECT name, home_port, length_feet, type, pax, low_price, yacht_code, main_image
+                                FROM $table WHERE status = 'active' LIMIT 9"
+                            );
+                            set_transient('yacht_initial_results', $yachts, 6 * HOUR_IN_SECONDS);
+                        }
+                    }
 
-</div>
-</div>
-</div>
-</div></div>
-<?php }
+                    $first = true;
+                    foreach($yachts as $yacht){
+                        $yacht->is_first = $first;
+                        $first = false;
+                        include plugin_path . 'yacht-archive/templates/yacht_card.php';
+                    }
+                    ?>
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- END MAIN SECTION -->
+
+</div> <!-- END FLEX ROW -->
+
+<?php } ?>

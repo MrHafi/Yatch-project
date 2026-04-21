@@ -1,10 +1,15 @@
 <?php
 
+// RUN THIS FILE VIA SERVER CRON JOB 
+if (php_sapi_name() !== 'cli') {
+    exit('Direct access not allowed.');
+}
+
 set_time_limit(0); // Prevent timeout during large sync batches.
 
 // Load WordPress core.
-require_once $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php';
-require_once ABSPATH . 'wp-includes/pluggable.php';
+    require_once $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php';
+    require_once ABSPATH . 'wp-includes/pluggable.php';
 
 global $wp_rewrite;
 
@@ -20,7 +25,7 @@ require_once plugin_dir_path(__FILE__) . '/yacht_sync_api.php';
 require_once plugin_dir_path(__FILE__) . '/yacht_sync_image.php';
 
 
-// ---------------- Write sync log ----------------
+// ---------------- Write sync log func ----------------
 function yacht_sync_log($message) {
     $log_file = plugin_dir_path(__FILE__) . 'yacht_detail_sync_log.txt';
     $time = current_time('mysql');
@@ -28,7 +33,7 @@ function yacht_sync_log($message) {
 }
 
 
-// ---------------- Start sync batch ----------------
+// ---------------- Log return function ----------------//
 function yacht_details_sync_batch() {
 
     global $wpdb;
@@ -38,7 +43,7 @@ function yacht_details_sync_batch() {
     $yachts_table  = $wpdb->prefix . 'temp_yachts';
     $details_table = $wpdb->prefix . 'temp_yacht_details';
 
-    // Stop if another sync is already running.
+    // PREZVENT DOUBLE RUN
     if (get_transient('yacht_sync_lock')) {
         yacht_sync_log('Sync skipped because lock already exists.');
         return;
@@ -47,6 +52,8 @@ function yacht_details_sync_batch() {
     // Create lock for this batch.
     set_transient('yacht_sync_lock', 1, 600);
 
+    // Save the time this batch started so the dashboard knows when sync last ran
+    update_option('yacht_last_sync_started', current_time('mysql'));
     yacht_sync_log('Sync batch started.');
 
     // Load media functions only when sync runs.
@@ -84,28 +91,63 @@ function yacht_details_sync_batch() {
             )
         );
 
-        update_option('yacht_details_sync_offset', 0); // Reset for next full cycle.
+     update_option('yacht_details_sync_offset', 0); // Reset for next full cycle.
         delete_option('yacht_sync_time'); // Remove old cycle timestamp.
         delete_transient('yacht_sync_lock'); // Release lock.
+
+        // Save the time this full sync cycle finished for the dashboard
+        update_option('yacht_last_sync_finished', current_time('mysql'));
+
+        // DELETING TRANSIENT
+        delete_transient('yacht_initial_results');
+        delete_transient('yacht_sidebar_guests');
+        delete_transient('yacht_sidebar_locations');
+
+        // Log cycle finish into the activity log
+        $log = get_option('yacht_sync_activity_log', []);
+        $log[] = current_time('mysql') . ' - Full sync cycle finished.';
+        update_option('yacht_sync_activity_log', array_slice($log, -50));
 
         yacht_sync_log('Sync cycle finished.');
         return;
     }
 
     // ---------------- Process each yacht ----------------
+    $added   = 0;
+    $updated = 0;
+    $skipped = 0;
     foreach ($codes as $code) {
 
         if (empty($code)) {
             continue; // Skip blank codes.
         }
 
-        yacht_process_single_yacht($code, $details_table, $sync_time);
+        // Capture status returned by processor to count results
+        $status = yacht_process_single_yacht($code, $details_table, $sync_time);
+
+        // Increment the correct counter based on what happened to this yacht
+        if ( $status === 'added' )        $added++;
+        elseif ( $status === 'updated' )  $updated++;
+        elseif ( $status === 'skipped' )  $skipped++;
     }
 
     // ---------------- Save next offset ----------------
     update_option('yacht_details_sync_offset', $offset + $limit);
 
-    delete_transient('yacht_sync_lock'); // Release lock after batch completes.
+  delete_transient('yacht_sync_lock'); // Release lock after batch completes.
+
+    // Save per-batch stats to WP options so the dashboard can display them
+    update_option('yacht_sync_last_batch_stats', [
+        'added'   => $added,
+        'updated' => $updated,
+        'skipped' => $skipped,
+        'time'    => current_time('mysql'),
+    ]);
+
+    // Append this batch result to the activity log, keeping only last 50 entries
+    $log = get_option('yacht_sync_activity_log', []);
+    $log[] = current_time('mysql') . " - Batch done: {$added} added, {$updated} updated, {$skipped} skipped";
+    update_option('yacht_sync_activity_log', array_slice($log, -50));
 
     yacht_sync_log('Sync batch completed.');
 }

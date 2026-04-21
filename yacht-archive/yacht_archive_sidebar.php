@@ -6,7 +6,14 @@ function yacht_sidebar(){
 <?php global $wpdb;
 $table = $wpdb->prefix . 'temp_yacht_details';
 
-$guests = $wpdb->get_col("SELECT DISTINCT pax FROM $table WHERE pax IS NOT NULL ORDER BY pax ASC");
+$guests = get_transient('yacht_sidebar_guests');
+
+if(!$guests){
+    $guests = $wpdb->get_col(
+        "SELECT DISTINCT pax FROM $table WHERE pax IS NOT NULL AND status = 'active' ORDER BY pax ASC"
+    );
+    set_transient('yacht_sidebar_guests', $guests, 12 * HOUR_IN_SECONDS);
+}
 ?>
 <div class="guests_container"></div>
 <select name="guests" class="p-2 p2 yacht_filter" id="guest_filter">
@@ -19,7 +26,7 @@ echo '<option value="'.$guest.'">'.$guest.' Guests</option>';
 ?>
 
 </select>
-</div>
+
 
 
 
@@ -29,12 +36,17 @@ echo '<option value="'.$guest.'">'.$guest.' Guests</option>';
 
 
 // Get unique locations
-$locations = $wpdb->get_col(
-    "SELECT DISTINCT home_port 
-     FROM {$table} 
-     WHERE home_port IS NOT NULL AND home_port != '' 
-     ORDER BY home_port ASC"
-);
+$locations = get_transient('yacht_sidebar_locations');
+
+if(!$locations){
+    $locations = $wpdb->get_col(
+        "SELECT DISTINCT home_port FROM $table
+         WHERE home_port IS NOT NULL AND home_port != ''
+         AND status = 'active'
+         ORDER BY home_port ASC"
+    );
+    set_transient('yacht_sidebar_locations', $locations, 12 * HOUR_IN_SECONDS);
+}
 ?>
 
 <div class="yacht-location-filters">
@@ -62,4 +74,21 @@ $locations = $wpdb->get_col(
 
 </div>
 
+
+
+<!-------------- AVAILABILITY -->
+<div class="yacht-availability-filter">
+    <h5>Check Availability</h5>
+    <label>Check-in</label>
+    <input type="date" id="checkin" class="form-control">
+    <label class="mt-2">Check-out</label>
+    <input type="date" id="checkout" class="form-control mt-1">
+    <button id="check_availability" class="btn btn-primary mt-2 w-100">Check Availability</button>
+    <p id="availability_msg" style="margin-top:10px;"></p>
+</div>
+
+
+
+
+</div>
 <?php } ?>

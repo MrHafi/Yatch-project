@@ -273,7 +273,7 @@ function yacht_process_single_yacht($code, $details_table, $sync_time) {
     $main_image_changed  = ($existing_main_image_api !== $data['main_image_api']);
     $layout_image_changed= ($existing_layout_image_api !== $data['layout_image_api']);
 
-    // Skip full update when nothing changed.
+   // Skip full update when nothing changed.
     if ($existing_row && !$data_changed && !$main_image_changed && !$layout_image_changed) {
 
         global $wpdb;
@@ -287,7 +287,8 @@ function yacht_process_single_yacht($code, $details_table, $sync_time) {
             ['id' => $existing_id]
         );
 
-        return;
+        // Return 'skipped' because data hasn't changed, no full update needed
+        return 'skipped';
     }
 
     // Keep old image values by default.
@@ -327,5 +328,11 @@ function yacht_process_single_yacht($code, $details_table, $sync_time) {
     // Save new or updated yacht row.
     yacht_save_yacht_row($code, $data, $details_table, $sync_time, $existing_row);
 
-    yacht_sync_log('Yacht ' . $code . ' synced successfully.');
+    if (!$existing_row) {
+        yacht_sync_log('Yacht ' . $code . ' added.');
+        return 'added';
+    }
+
+    yacht_sync_log('Yacht ' . $code . ' updated.');
+    return 'updated';
 }

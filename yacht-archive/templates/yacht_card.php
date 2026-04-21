@@ -4,7 +4,7 @@
 <div class="col-md-4">
 <div class="card bg-dark text-white border-0 h-100">
 
-<img src="<?php echo esc_url($yacht->main_image_api); ?>" class="card-img-top">
+<img src="<?php echo esc_url($yacht->main_image); ?>" class="card-img-top" loading="lazy">
 
 <div class="card-body">
 
