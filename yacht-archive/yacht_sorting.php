@@ -12,6 +12,10 @@ global $wpdb;
 
 $table = $wpdb->prefix . 'temp_yacht_details';
 $sort = isset($_POST['sort']) ? sanitize_text_field($_POST['sort']) : '';
+    // PAGINATION
+$page   = isset($_POST['page']) ? intval($_POST['page']) : 1; //current page
+$limit  = 9; 
+$offset = ($page - 1) * $limit; //where to start the product like 9 then 18 then 27
 
 $order = "name ASC";
 
@@ -70,13 +74,18 @@ if (!empty($checkin) && !empty($checkout)) {
 // combine conditions
 $where = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
 
-$yachts = $wpdb->get_results(" SELECT name, home_port, length_feet, type, pax, low_price, yacht_code, main_image
-                               FROM $table WHERE status = 'active' LIMIT 9 ");
+$total_matching_yachts  = $wpdb->get_var("SELECT COUNT(*) FROM $table $where");
+
+$yachts = $wpdb->get_results(
+    "SELECT name, home_port, length_feet, type, pax, low_price, yacht_code, main_image
+     FROM $table $where ORDER BY $order LIMIT $limit OFFSET $offset"
+);
 ?>
 
+<!-- CARDS  -->
 <div class="row g-4">
 
-<?php if(empty($yachts)): ?>
+<?php if(empty($yachts)): ?> 
     <p class="text-white text-center w-100">No yachts found matching your criteria.</p>
 <?php else: ?>
     <?php foreach($yachts as $yacht){
@@ -85,6 +94,16 @@ $yachts = $wpdb->get_results(" SELECT name, home_port, length_feet, type, pax, l
 <?php endif; ?>
 
 </div>
+
+
+<!-- PAGINATION  if more yachts are there-->
+ <?php if(($offset + $limit) < $total_matching_yachts): ?>
+<div class="yacht-load-more-wrap">
+    <button class="yacht-load-more" data-page="<?php echo $page + 1; ?>">
+        Load More
+    </button>
+</div>
+<?php endif; ?>
 
 <?php
 wp_die();

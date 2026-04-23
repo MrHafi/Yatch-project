@@ -1,15 +1,13 @@
 jQuery(document).ready(function($){
 
-    // URL PARAMS - pre-fill sidebar
+    var currentPage = 1;
+
+    // URL PARAMS - pre-fill sidebar from homepage search
     var urlParams = new URLSearchParams(window.location.search);
-
     if(urlParams.has('location') || urlParams.has('guests') || urlParams.has('checkin')){
-
         if(urlParams.get('guests'))   $('#guest_filter').val(urlParams.get('guests'));
         if(urlParams.get('checkin'))  $('#checkin').val(urlParams.get('checkin'));
         if(urlParams.get('checkout')) $('#checkout').val(urlParams.get('checkout'));
-
-        // CHECKING THE RIGHT CHECKED RADIO BUTON FORM ALL AVAILANBLE
         if(urlParams.get('location')){
             var locVal = urlParams.get('location');
             $('input[name="yacht_location"]').each(function(){
@@ -27,8 +25,13 @@ jQuery(document).ready(function($){
     });
 
     // FILTER FUNCTION
-    function runFilter(){
-        $('#yacht_results').html('<p>Fetching yachts...</p>');
+    function runFilter(page, append){
+        if(!append){
+            $('#yacht_results').html('<p>Fetching yachts...</p>');
+        } else {
+            $('.yacht-load-more').text('Loading...').prop('disabled', true);
+        }
+
         $.ajax({
             url:  ajax_object.ajax_url,
             type: 'POST',
@@ -38,17 +41,38 @@ jQuery(document).ready(function($){
                 guests:   $('#guest_filter').val(),
                 location: $('input[name="yacht_location"]:checked').val(),
                 checkin:  $('#checkin').val(),
-                checkout: $('#checkout').val()
+                checkout: $('#checkout').val(),
+                page:     page
             },
-            success: function(response){
-                $('#yacht_results').html(response);
-            }
+    success: function(response){
+    var $wrap   = $('<div>').html(response);
+    var $button = $wrap.find('.yacht-load-more-wrap').detach();
+
+    $('.yacht-load-more-wrap').remove();
+
+    if(append){
+        $('#yacht_results .row').append($wrap.find('.col-md-4'));
+    } else {
+        $('#yacht_results').html($wrap.find('.row'));
+    }
+
+    if($button.length){
+        $('#yacht_results').after($button);
+    }
+}
         });
     }
 
-    // ALL FILTERS
+    // ALL FILTERS - reset to page 1
     $('.yacht_filter').on('change', function(){
-        runFilter();
+        currentPage = 1;
+        runFilter(currentPage, false);
+    });
+
+    // LOAD MORE BUTTON
+    $(document).on('click', '.yacht-load-more', function(){
+        currentPage = $(this).data('page');
+        runFilter(currentPage, true);
     });
 
     // AVAILABILITY BUTTON
@@ -65,7 +89,8 @@ jQuery(document).ready(function($){
             return;
         }
         $('#availability_msg').text('');
-        runFilter();
+        currentPage = 1;
+        runFilter(currentPage, false);
     });
 
 });

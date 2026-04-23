@@ -56,6 +56,7 @@ function all_yachtes(){ ?>
                         if($url_location != '')   $conditions[] = $wpdb->prepare("home_port = %s", $url_location);
 
                         if(!empty($url_checkin) && !empty($url_checkout)){
+                            
                             $availability_table = $wpdb->prefix . 'yacht_availability';
                             $booked_codes = $wpdb->get_col($wpdb->prepare(
                                 "SELECT DISTINCT yacht_code FROM $availability_table
@@ -69,6 +70,7 @@ function all_yachtes(){ ?>
                         }
 
                         $where  = "WHERE " . implode(" AND ", $conditions);
+                        $total  = $wpdb->get_var("SELECT COUNT(*) FROM $table $where");
                         $yachts = $wpdb->get_results(
                             "SELECT name, home_port, length_feet, type, pax, low_price, yacht_code, main_image
                             FROM $table $where LIMIT 9"
@@ -76,13 +78,17 @@ function all_yachtes(){ ?>
 
                     } else {
                         // no URL params - use transient cache
-                        $yachts = get_transient('yacht_initial_results');
-                        if(!$yachts){
+                       $yachts = get_transient('yacht_initial_results');
+                        $total  = get_transient('yacht_initial_total');
+
+                        if(!$yachts || !$total){
+                            $total  = $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE status = 'active'");
                             $yachts = $wpdb->get_results(
                                 "SELECT name, home_port, length_feet, type, pax, low_price, yacht_code, main_image
                                 FROM $table WHERE status = 'active' LIMIT 9"
                             );
                             set_transient('yacht_initial_results', $yachts, 6 * HOUR_IN_SECONDS);
+                            set_transient('yacht_initial_total', $total, 6 * HOUR_IN_SECONDS);
                         }
                     }
 
@@ -93,8 +99,15 @@ function all_yachtes(){ ?>
                         include plugin_path . 'yacht-archive/templates/yacht_card.php';
                     }
                     ?>
-                </div>
+       </div>
             </div>
+
+            <?php if(9 < $total): ?>
+            <div class="yacht-load-more-wrap">
+                <button class="yacht-load-more" data-page="2">Load More</button>
+            </div>
+            <?php endif; ?>
+
         </div>
 
     </div> <!-- END MAIN SECTION -->
