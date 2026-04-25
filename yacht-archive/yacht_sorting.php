@@ -38,8 +38,28 @@ $conditions[] = "status = 'active'";
 
 if($guests > 0) $conditions[] = $wpdb->prepare("pax = %d", $guests); //add guests if it is not empty
 if($location != '') $conditions[] = $wpdb->prepare("home_port = %s", $location);
+// BOAT TYPE
+$boat_type = isset($_POST['boat_type']) ? sanitize_text_field($_POST['boat_type']) : '';
+if($boat_type != '') $conditions[] = $wpdb->prepare("type = %s", $boat_type);
 
 
+// PRICING...........................................
+$price_ranges = isset($_POST['price_ranges']) ? $_POST['price_ranges'] : [];
+
+if(!empty($price_ranges)){
+    $price_conditions = [];
+    foreach($price_ranges as $range){
+        $parts = explode('-', sanitize_text_field($range));  //min value - max value in an array
+        if(count($parts) === 2){
+            $min = floatval($parts[0]);
+            $max = floatval($parts[1]);
+            $price_conditions[] = $wpdb->prepare("(low_price >= %f AND low_price <= %f)", $min, $max);
+        }
+    }
+    if(!empty($price_conditions)){
+        $conditions[] = '(' . implode(' OR ', $price_conditions) . ')';
+    }
+}
 
 
 // get checkin and checkout from AJAX

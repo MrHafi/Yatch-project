@@ -5,23 +5,27 @@ jQuery(document).ready(function($){
     // URL PARAMS - pre-fill sidebar from homepage search
     var urlParams = new URLSearchParams(window.location.search);
     if(urlParams.has('location') || urlParams.has('guests') || urlParams.has('checkin')){
+
+        // SAVING DATA FROM URL
         if(urlParams.get('guests'))   $('#guest_filter').val(urlParams.get('guests'));
         if(urlParams.get('checkin'))  $('#checkin').val(urlParams.get('checkin'));
         if(urlParams.get('checkout')) $('#checkout').val(urlParams.get('checkout'));
         if(urlParams.get('location')){
+                // MATCHING AND CHECKING THE MATCHED LOCATION
             var locVal = urlParams.get('location');
             $('input[name="yacht_location"]').each(function(){
                 if($(this).val() === locVal){
-                    $(this).prop('checked', true);
+                    $(this).prop('checked', true); //checked the matched one
                     return false;
                 }
             });
         }
+
     }
 
     // CHECKIN MIN DATE
     $('#checkin').on('change', function(){
-        $('#checkout').attr('min', $(this).val());
+        $('#checkout').attr('min', $(this).val()); //checkout cant be lesser to checkin 
     });
 
     // FILTER FUNCTION
@@ -29,7 +33,7 @@ jQuery(document).ready(function($){
         if(!append){
             $('#yacht_results').html('<p>Fetching yachts...</p>');
         } else {
-            $('.yacht-load-more').text('Loading...').prop('disabled', true);
+            $('.yacht-load-more').text('Loading...').prop('disabled', true);  //DISBABLING MORE BUTON
         }
 
         $.ajax({
@@ -40,6 +44,8 @@ jQuery(document).ready(function($){
                 sort:     $('#yacht_sort').val(),
                 guests:   $('#guest_filter').val(),
                 location: $('input[name="yacht_location"]:checked').val(),
+                boat_type: $('#boat_type_filter').val(),
+                price_ranges: $('.price-filter:checked').map(function(){ return $(this).val(); }).get(),
                 checkin:  $('#checkin').val(),
                 checkout: $('#checkout').val(),
                 page:     page
@@ -48,14 +54,15 @@ jQuery(document).ready(function($){
     var $wrap   = $('<div>').html(response);
     var $button = $wrap.find('.yacht-load-more-wrap').detach();
 
-    $('.yacht-load-more-wrap').remove();
+    $('.yacht-load-more-wrap').remove(); //removing old btn
 
     if(append){
-        $('#yacht_results .row').append($wrap.find('.col-md-4'));
+        $('#yacht_results .row').append($wrap.find('.col-md-4')); //ADD CARDS UNDER OLD ONES
     } else {
         $('#yacht_results').html($wrap.find('.row'));
     }
 
+    // PUTTING BUYTTON AFTER REWSUTL
     if($button.length){
         $('#yacht_results').after($button);
     }
@@ -63,8 +70,8 @@ jQuery(document).ready(function($){
         });
     }
 
-    // ALL FILTERS - reset to page 1
-    $('.yacht_filter').on('change', function(){
+    // PRICE FILTER CHECKBOXES
+    $('.price-filter').on('change', function(){
         currentPage = 1;
         runFilter(currentPage, false);
     });

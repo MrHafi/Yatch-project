@@ -75,6 +75,34 @@ if(!$locations){
 </div>
 
 
+<!-- BOAT TYPE -->
+<div class="yacht-type-filter">
+    <h5>Boat Type</h5>
+    <select name="boat_type" class="yacht_filter form-control" id="boat_type_filter">
+        <option value="">All Types</option>
+        <option value="Cat">Catamaran</option>
+        <option value="Power">Power</option>
+        <option value="Sail">Sail</option>
+        <option value="Motor">Motor</option>
+    </select>
+</div>
+
+<!-- PRICE FILTER -->
+<div class="yacht-price-filter">
+    <h5>Price Range</h5>
+    <div class="form-check">
+        <input class="form-check-input price-filter" type="checkbox" id="price_1" value="0-25000">
+        <label class="form-check-label" for="price_1">Under $25,000/week</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input price-filter" type="checkbox" id="price_2" value="25000-75000">
+        <label class="form-check-label" for="price_2">$25,000 - $75,000/week</label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input price-filter" type="checkbox" id="price_3" value="75000-99999999">
+        <label class="form-check-label" for="price_3">Above $75,000/week</label>
+    </div>
+</div>
 
 <!-------------- AVAILABILITY -->
 <div class="yacht-availability-filter">
