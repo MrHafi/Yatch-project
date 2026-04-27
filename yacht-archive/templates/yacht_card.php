@@ -22,7 +22,8 @@
 
 <p>Pricing From: €<?php echo esc_html($yacht->low_price); ?>/Week</p>
 
-<a href="/single-yacht-page/?usr_id_in=<?php echo esc_attr($yacht->yacht_code); ?>" class="btn btn-primary">
+<!-- <a href="/single-yacht-page/?usr_id_in=<?php echo esc_attr($yacht->yacht_code); ?>" class="btn btn-primary"> -->
+<a href="<?php echo esc_url(home_url('/single-yacht-page/?usr_id_in=' . $yacht->yacht_code)); ?>" class="btn btn-primary">
 VIEW YACHT
 </a>
 
