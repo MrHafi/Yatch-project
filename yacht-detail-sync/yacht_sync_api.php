@@ -9,7 +9,8 @@ if (!defined('ABSPATH')) {
 function yacht_get_api_yacht_data($code) {
 
     // Build API URL for the current yacht code.
-    $url = 'https://www.centralyachtagent.com/snapins/json-ebrochure.php?user=1073&apicode=1073YF4$sdRr91%X&idin=' . rawurlencode($code);
+    // $url = 'https://www.centralyachtagent.com/snapins/json-ebrochure.php?user=1073&apicode=1073YF4$sdRr91%X&idin=' . rawurlencode($code);
+    $url = 'https://www.centralyachtagent.com/snapins/json-ebrochure.php?user=1073&apicode=' . YACHT_API_KEY . '&idin=' . rawurlencode($code);
 
     usleep(200000); // Small delay to reduce API pressure.
 

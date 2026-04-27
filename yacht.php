@@ -169,6 +169,3 @@ array('ajax_url'=>admin_url('admin-ajax.php'))
 add_action('wp_enqueue_scripts','yacht_archive_scripts');
 
 
-// FILTER BY GUESTS
-add_action('wp_ajax_filter_yachts','filter_yachts');
-add_action('wp_ajax_nopriv_filter_yachts','filter_yachts');
