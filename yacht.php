@@ -17,17 +17,23 @@ define('plugin_url', plugin_dir_url(__FILE__));  //assets files
 
 // FILES 
 require_once plugin_path . 'activation.php';
-require_once plugin_path . 'yacht_location_server_cron_job.php';
+// require_once plugin_path . 'yacht_location_server_cron_job.php';
+require_once plugin_path . 'home_page.php';
 
 require_once plugin_path . 'yacht-detail-sync/yacht_sync_processor.php';
-require_once plugin_path . 'yacht-detail-sync/yacht_sync_batch.php';
+// require_once plugin_path . 'yacht-detail-sync/yacht_sync_batch.php';
 require_once plugin_path . 'yacht-detail-sync/yacht_sync_api.php';
 require_once plugin_path . 'yacht-detail-sync/yacht_sync_image.php';
+
 // ARCHIVE TEMPLATE FILES
 require_once plugin_path . 'yacht-archive/yacht_archive.php';
 require_once plugin_path . 'yacht-archive/yacht_archive_sidebar.php';
 require_once plugin_path . 'yacht-archive/yacht_sorting.php';
 
+// SINGLE YACHT  FILES
+require_once plugin_path . 'yacht-single/single_yacht.php';
+// Load admin dashboard file for sync monitoring
+require_once plugin_path . 'admin/yacht_admin_dashboard.php';
 
 
 
@@ -41,12 +47,12 @@ register_activation_hook(__FILE__, 'mp_plugin_activate');
 function mp_enqueue_assets() {
 
    /* Bootstrap CSS */
-    wp_enqueue_style(
-    'mp-bootstrap-css',
-    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-    array(),
-    '5.3.3'
-    );
+        // wp_enqueue_style(
+        // 'mp-bootstrap-css',
+        // 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
+        // array(),
+        // '5.3.3'
+        // );
 
         /* Plugin Style */
   /* Plugin Style */
@@ -58,29 +64,7 @@ wp_enqueue_style(
 );
 
 
-    /* Bootstrap JS */
-    wp_enqueue_script(
-    'mp-bootstrap-js',
-    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js',
-    array(),
-    '5.3.3',
-    true
-    );
 
-    /*
-    |--------------------------------------------------------------
-    | Pass AJAX data to JavaScript
-    |--------------------------------------------------------------
-    */
-
-    wp_localize_script(
-        'mp-bootstrap-js',
-        'mp_ajax',
-        array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce'    => wp_create_nonce('mp_ajax_nonce')
-        )
-    );
 }
 
 add_action('wp_enqueue_scripts', 'mp_enqueue_assets');
@@ -127,21 +111,6 @@ add_filter('image_editor_output_format', function ($formats) {
 
 
 
-// NEW POAGE FOR ALL YACHT
-register_activation_hook(__FILE__, 'create_yachts_page');
-
-function create_yachts_page(){
-
-$page = array(
-'post_title'   => 'All Yachts',
-'post_content' => '[all_yachtes]',
-'post_status'  => 'publish',
-'post_type'    => 'page'
-);
-
-wp_insert_post($page);
-
-}
 
 //YACHT SORTING FOR ARCVHIVE PAGE
 add_action('wp_ajax_yacht_sorting','yacht_sorting');

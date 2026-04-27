@@ -118,7 +118,67 @@ function mp_plugin_activate() {
     ) $charset_collate;";
     dbDelta($sql);
 
+
+
+
+
+
+    /*-------------------------------------------------------------- TABLE 3 : YACHT AVAILABILITY */
+
+$table = $wpdb->prefix . 'yacht_availability';
+
+$sql = "CREATE TABLE $table (
+    id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+    yacht_code VARCHAR(100) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    book_type TINYINT NOT NULL,
+    synced_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY yacht_code (yacht_code),
+    KEY date_range (start_date, end_date)
+) $charset_collate;";
+
+dbDelta($sql);
+
+
+//CALIING PAGE FUNCTIOPNS
+create_yachts_page();
+create_single_yachts_page();
 }
+function create_yachts_page() {
+    $existing = get_page_by_path('all-yachts');
+    if ($existing) return;
+
+    $page = array(
+        'post_title'   => 'All Yachts',
+        'post_name'    => 'all-yachts',
+        'post_content' => '[all_yachtes]',
+        'post_status'  => 'publish',
+        'post_type'    => 'page'
+    );
+    wp_insert_post($page);
+}
+
+function create_single_yachts_page() {
+    $existing = get_page_by_path('single-yacht-page');
+    if ($existing) return;
+
+    $page = array(
+        'post_title'   => 'Single Yacht Page',
+        'post_name'    => 'single-yacht-page',
+        'post_content' => '[yacht_single]',
+        'post_status'  => 'publish',
+        'post_type'    => 'page'
+    );
+    wp_insert_post($page);
+}
+
+
+
+
+
+
 
 
 
